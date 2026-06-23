@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GGoC — Inflow vs Outflow Dashboard</title>
+<style>
+  :root{
+    --green:#2e7d32; --red:#c62828; --blue:#1f4e78; --ink:#1c2733;
+    --muted:#6b7280; --line:#e5e9ef; --bg:#f4f6fa;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--ink);padding:24px;line-height:1.45}
+  .wrap{max-width:1180px;margin:0 auto}
+  header h1{font-size:24px;color:var(--blue)}
+  header p{color:#6b7280;font-size:13px;margin-top:2px}
+  .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin:22px 0}
+  .card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:18px 20px;box-shadow:0 1px 3px rgba(20,40,80,.05);transition:.18s}
+  .card.click{cursor:pointer}
+  .card.click:hover{transform:translateY(-3px);box-shadow:0 8px 22px rgba(20,40,80,.12)}
+  .card.active{outline:2px solid currentColor}
+  .card .lbl{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:#6b7280;display:flex;justify-content:space-between;align-items:center}
+  .card .val{font-size:27px;font-weight:700;margin-top:6px;color:var(--ink)}
+  .card .sub{font-size:12px;color:#9aa3af;margin-top:3px}
+  .card.in{color:var(--green)} .card.out{color:var(--red)} .card.net{color:var(--blue)}
+  .hint{font-size:10px;font-weight:600;background:currentColor;color:#fff;padding:2px 7px;border-radius:20px;opacity:.85}
+  .panel{background:#fff;border:1px solid var(--line);border-radius:14px;margin-bottom:16px;overflow:hidden;display:none}
+  .panel.open{display:block;animation:fade .25s}
+  @keyframes fade{from{opacity:0;transform:translateY(-6px)}to{opacity:1}}
+  .panel h2{font-size:15px;padding:14px 18px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}
+  .panel h2 .t{font-weight:700}
+  .seg{display:flex;gap:6px}
+  .seg button{font:inherit;font-size:12px;border:1px solid var(--line);background:#fff;padding:5px 11px;border-radius:8px;cursor:pointer;color:#6b7280}
+  .seg button.on{background:var(--blue);color:#fff;border-color:var(--blue)}
+  .rows{padding:10px 18px 18px}
+  .row{display:grid;grid-template-columns:240px 1fr 130px 56px;align-items:center;gap:12px;padding:7px 0;border-bottom:1px dashed #eef1f5}
+  .row.grow{cursor:default}
+  .row .nm{font-size:13px;font-weight:500}
+  .bar{height:16px;border-radius:6px;background:var(--c);min-width:2px;transition:width .5s}
+  .row .amt{text-align:right;font-variant-numeric:tabular-nums;font-size:13px;font-weight:600}
+  .row .pct{text-align:right;font-size:11px;color:#9aa3af}
+  .row.total{font-weight:700;border-top:2px solid #d4dae3;border-bottom:none;margin-top:5px;padding-top:9px}
+  .row.total .amt{font-size:14px}
+  .cv{display:inline-block;transition:.15s;color:#9aa3af;font-size:10px;width:12px}
+  .cv.open{transform:rotate(90deg)}
+  .kids{display:none}
+  .kids.open{display:block;animation:fade .2s}
+  .krow{display:flex;justify-content:space-between;gap:12px;padding:5px 12px 5px 30px;border-bottom:1px dashed #f0f3f7;font-size:12px}
+  .krow .kn{color:#566} .krow .kamt{font-variant-numeric:tabular-nums;font-weight:600}
+  .section{background:#fff;border:1px solid var(--line);border-radius:14px;margin-top:8px}
+  .section > h2{font-size:16px;color:var(--blue);padding:16px 18px;border-bottom:1px solid var(--line)}
+  .cmp{padding:14px 18px}
+  .crow{display:grid;grid-template-columns:185px 1fr;gap:14px;align-items:center;padding:9px 0;border-bottom:1px dashed #eef1f5}
+  .crow:last-child{border-bottom:none}
+  .crow .cn{font-size:13px;font-weight:500}
+  .pair{display:flex;flex-direction:column;gap:4px}
+  .pbar{display:flex;align-items:center;gap:8px}
+  .pbar .b{height:13px;border-radius:5px;min-width:2px}
+  .pbar .lab{font-size:11px;width:118px;text-align:right;font-variant-numeric:tabular-nums}
+  .tag{font-size:9px;width:30px;color:#9aa3af;font-weight:700}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{padding:9px 12px;text-align:right;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums}
+  th{background:#f7f9fc;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:#6b7280;cursor:pointer;user-select:none;white-space:nowrap}
+  th:first-child,td:first-child{text-align:left}
+  th.sorted::after{content:" \25BE";color:var(--blue)}
+  th.asc.sorted::after{content:" \25B4"}
+  tbody tr:hover{background:#f9fbfe}
+  td.pos{color:var(--green);font-weight:600} td.neg{color:var(--red);font-weight:600}
+  tfoot td{font-weight:700;background:#f7f9fc;border-top:2px solid var(--blue)}
+  .foot{text-align:center;color:#9aa3af;font-size:11px;margin-top:18px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>GGoC — Inflow vs Outflow Dashboard</h1>
+    <p>Income &amp; Expense Detail • 01.01.2026 – 18.06.2026 • All figures in Rs</p>
+  </header>
+
+  <div class="cards">
+    <div class="card in click" id="cardIn" onclick="togglePanel('in')">
+      <div class="lbl">Total Inflow <span class="hint">click &#9662;</span></div>
+      <div class="val" id="kpiIn"></div>
+      <div class="sub">Construction + Rental + Other Income</div>
+    </div>
+    <div class="card out click" id="cardOut" onclick="togglePanel('out')">
+      <div class="lbl">Total Outflow <span class="hint">click &#9662;</span></div>
+      <div class="val" id="kpiOut"></div>
+      <div class="sub">Projects + Non-Project</div>
+    </div>
+    <div class="card net">
+      <div class="lbl">Net Balance</div>
+      <div class="val" id="kpiNet"></div>
+      <div class="sub">Inflow &minus; Outflow</div>
+    </div>
+  </div>
+
+  <div class="panel" id="panel-in">
+    <h2><span class="t" id="title-in">Inflow — Project-wise Breakup</span>
+      <span class="seg"><button class="on" onclick="setView('in','proj',this)">By Project</button>
+      <button onclick="setView('in','grp',this)">By Group</button></span></h2>
+    <div class="rows" id="rows-in"></div>
+  </div>
+
+  <div class="panel" id="panel-out">
+    <h2><span class="t" id="title-out">Outflow — Project-wise Breakup</span>
+      <span class="seg"><button class="on" onclick="setView('out','proj',this)">By Project</button>
+      <button onclick="setView('out','grp',this)">By Group</button></span></h2>
+    <div class="rows" id="rows-out"></div>
+  </div>
+
+  <div class="section">
+    <h2>Project-wise Inflow vs Outflow</h2>
+    <div class="cmp" id="cmpBars"></div>
+  </div>
+
+  <div class="section" style="margin-top:16px">
+    <h2>Comparative Table <span style="font-size:11px;font-weight:400;color:#9aa3af">(click a column to sort)</span></h2>
+    <table id="cmpTable">
+      <thead><tr>
+        <th data-k="name">Project</th>
+        <th data-k="inflow" class="sorted">Inflow</th>
+        <th data-k="outflow">Outflow</th>
+        <th data-k="net">Net</th>
+      </tr></thead>
+      <tbody></tbody><tfoot></tfoot>
+    </table>
+  </div>
+
+  <p class="foot">Snapshot from the “Inflow vs Outflow” &amp; “Main Summary” sheets. Update the workbook and regenerate to refresh.</p>
+</div>
+
+<script>
+// ---------- DATA ----------
+const conInflow = [
+  ["Gohar Rabi Center",235130636],["Gohar Residencia & Shopping Mall",156915860],
+  ["Gohar Villas Phase 1&2",105097959],["LT-20",88530160],["Gohar Golf Vista",62628217],
+  ["Gohar Paradise (Gateway)",51591296],["Gohar Complex",41045610],["Gohar Green Corner",37733766],
+  ["Gohar Villas Phase 3",22763240],["KN Gohar Green City",21344309],["Gohar Bara Market",19934000],
+  ["Gohar Towers",18329350],["Gohar e Nayab",1447900]
+];
+const rentalIncome = [
+  ["Gohar Rabi Center (106 Units)",14924265],["Zx Collection (Gohar Rabi Center)",12500000],
+  ["Gohar Towers (51 Units)",12370000],["Mandi House (Gohar Comforts)",8038500],
+  ["Najla's (Dilkusha & Gohar Residency)",4000000],["Gohar Complex (20 Units)",2810060],
+  ["The Next School (KNGGC)",2400000],["KN Gohar Green City (13 Units)",996000],
+  ["Gohar Terrace (Shops) - not rcvd yet",0]
+];
+const otherIncome = [
+  ["Profit Universal Gas Distribution (Pvt) Ltd",49600000],["Rcvd from MHG",40500000],
+  ["Rcvd from Fakhruddin (Loan return)",5000000],["FBR 236K difference - KNG",1563680],
+  ["FBR 236K difference - GMT",958856],["Scrap Sale",777405],["Amanat",489700],
+  ["Profit Next School (Clifton & Teen Talwar)",75000]
+];
+const conOutflow = [
+  ["Gohar Golf Vista",132266719],["Gohar Residencia & Shopping Mall",94243492.56],
+  ["KN Gohar Green City",79436307],["Gohar Bara Market",79129779],["Gohar Villas Phase 1&2",71268352],
+  ["Gohar Paradise (Gateway)",31074763],["Gohar Towers",29597273],["Gohar Green Corner",18392564],
+  ["Gohar Rabi Center",11220756],["Gohar Complex",5952975],["Gohar Villas Phase 3",2632900],
+  ["LT-20",0],["Gohar e Nayab",0]
+];
+
+const inflow = {
+  proj: conInflow,
+  grp: [
+    {name:"Construction Projects", value:862492303, children:conInflow},
+    {name:"Other Income", value:98964641, children:otherIncome},
+    {name:"Rental Income", value:58038825, children:rentalIncome}
+  ]
+};
+const outflow = {
+  proj: conOutflow,
+  grp: [
+    {name:"Construction Projects", value:555215880.56, children:conOutflow},
+    {name:"Loans (Kashif + Chinar)", value:95280000},
+    {name:"Salaries Cum Bonus", value:73058073},
+    {name:"MHG - Personal", value:72799828},
+    {name:"Partner Payments", value:68839756},
+    {name:"MHG - Others", value:25537536},
+    {name:"Keller Payment", value:19000000},
+    {name:"Charity & Donation", value:16471013},
+    {name:"Zakat", value:14000000},
+    {name:"Headoffice", value:10284109},
+    {name:"Hunar Foundation", value:10034586},
+    {name:"Harjaga.com", value:954468},
+    {name:"Gohar Presidency", value:500000}
+  ]
+};
+const TOT_IN = 1019495769, TOT_OUT = 961975249.56, NET = TOT_IN - TOT_OUT;
+
+const inMap = Object.fromEntries(conInflow), outMap = Object.fromEntries(conOutflow);
+let cmp = Object.keys(inMap).map(n => ({name:n, inflow:inMap[n], outflow:outMap[n]||0, net:inMap[n]-(outMap[n]||0)}));
+
+const fmt = n => Math.round(n).toLocaleString('en-US');
+document.getElementById('kpiIn').textContent  = 'Rs ' + fmt(TOT_IN);
+document.getElementById('kpiOut').textContent = 'Rs ' + fmt(TOT_OUT);
+const netEl = document.getElementById('kpiNet');
+netEl.textContent = 'Rs ' + fmt(NET);
+netEl.style.color = NET>=0 ? 'var(--green)' : 'var(--red)';
+
+const state = {in:'proj', out:'proj'};
+
+function leafRow(nm,v,max,total,color){
+  return `<div class="row"><div class="nm">${nm}</div>
+    <div><div class="bar" style="--c:${color};width:${max?Math.max(v/max*100,0.5):0}%"></div></div>
+    <div class="amt">${fmt(v)}</div><div class="pct">${(v/total*100).toFixed(1)}%</div></div>`;
+}
+function totalRow(label,v){
+  return `<div class="row total"><div class="nm">${label}</div><div></div>
+    <div class="amt">${fmt(v)}</div><div class="pct"></div></div>`;
+}
+
+function renderRows(which){
+  const src = (which==='in'?inflow:outflow);
+  const total = which==='in'?TOT_IN:TOT_OUT;
+  const color = which==='in'?'var(--green)':'var(--red)';
+  // heading
+  document.getElementById('title-'+which).textContent =
+    (which==='in'?'Inflow':'Outflow') + ' — ' + (state[which]==='proj'?'Project-wise Breakup':'Group-wise Breakup');
+  let html='';
+  if(state[which]==='proj'){
+    const arr=[...src.proj].sort((a,b)=>b[1]-a[1]);
+    const max=Math.max(...arr.map(d=>d[1]));
+    const sub=arr.reduce((s,d)=>s+d[1],0);
+    html = arr.map(([nm,v])=>leafRow(nm,v,max,total,color)).join('');
+    html += totalRow('Total — Construction Projects', sub);
+  } else {
+    const groups=[...src.grp].sort((a,b)=>b.value-a.value);
+    const max=Math.max(...groups.map(g=>g.value));
+    groups.forEach((g,gi)=>{
+      const kids = g.children && g.children.length;
+      html += `<div class="row grow" ${kids?`style="cursor:pointer" onclick="toggleKids('${which}',${gi})"`:''}>
+        <div class="nm">${kids?`<span class="cv" id="cv-${which}-${gi}">\u25B8</span> `:'<span style="display:inline-block;width:12px"></span> '}${g.name}</div>
+        <div><div class="bar" style="--c:${color};width:${max?g.value/max*100:0}%"></div></div>
+        <div class="amt">${fmt(g.value)}</div><div class="pct">${(g.value/total*100).toFixed(1)}%</div></div>`;
+      if(kids){
+        const ch=[...g.children].sort((a,b)=>b[1]-a[1]);
+        html += `<div class="kids" id="kids-${which}-${gi}">` +
+          ch.map(([nm,v])=>`<div class="krow"><span class="kn">${nm}</span><span class="kamt">${fmt(v)}</span></div>`).join('') + `</div>`;
+      }
+    });
+    html += totalRow(which==='in'?'Grand Total — Inflow':'Grand Total — Outflow', total);
+  }
+  document.getElementById('rows-'+which).innerHTML = html;
+}
+function toggleKids(which,gi){
+  document.getElementById('kids-'+which+'-'+gi).classList.toggle('open');
+  document.getElementById('cv-'+which+'-'+gi).classList.toggle('open');
+}
+function setView(which,view,btn){
+  state[which]=view;
+  btn.parentNode.querySelectorAll('button').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+  renderRows(which);
+}
+function togglePanel(which){
+  const p=document.getElementById('panel-'+which), c=document.getElementById('card'+(which==='in'?'In':'Out'));
+  const open=p.classList.contains('open');
+  document.querySelectorAll('.panel').forEach(x=>x.classList.remove('open'));
+  document.querySelectorAll('.card.click').forEach(x=>x.classList.remove('active'));
+  if(!open){ p.classList.add('open'); c.classList.add('active'); renderRows(which); }
+}
+
+function renderCmpBars(){
+  const list=[...cmp].sort((a,b)=>b.inflow-a.inflow);
+  const max=Math.max(...list.map(d=>Math.max(d.inflow,d.outflow)));
+  document.getElementById('cmpBars').innerHTML = list.map(d=>`
+    <div class="crow"><div class="cn">${d.name}</div>
+      <div class="pair">
+        <div class="pbar"><span class="tag">IN</span><span class="b" style="background:var(--green);width:${d.inflow/max*100}%"></span><span class="lab">${fmt(d.inflow)}</span></div>
+        <div class="pbar"><span class="tag">OUT</span><span class="b" style="background:var(--red);width:${d.outflow/max*100}%"></span><span class="lab">${fmt(d.outflow)}</span></div>
+      </div></div>`).join('');
+}
+
+let sortK='inflow', sortAsc=false;
+function renderTable(){
+  cmp.sort((a,b)=> sortK==='name' ? (sortAsc?a.name.localeCompare(b.name):b.name.localeCompare(a.name)) : (sortAsc?a[sortK]-b[sortK]:b[sortK]-a[sortK]));
+  document.querySelector('#cmpTable tbody').innerHTML = cmp.map(d=>`<tr>
+    <td>${d.name}</td><td>${fmt(d.inflow)}</td><td>${fmt(d.outflow)}</td>
+    <td class="${d.net>=0?'pos':'neg'}">${d.net<0?'('+fmt(-d.net)+')':fmt(d.net)}</td></tr>`).join('');
+  const ti=cmp.reduce((s,d)=>s+d.inflow,0), to=cmp.reduce((s,d)=>s+d.outflow,0);
+  document.querySelector('#cmpTable tfoot').innerHTML =
+    `<tr><td>Construction Total</td><td>${fmt(ti)}</td><td>${fmt(to)}</td><td class="${ti-to>=0?'pos':'neg'}">${fmt(ti-to)}</td></tr>`;
+  document.querySelectorAll('#cmpTable th').forEach(th=>{
+    th.classList.toggle('sorted', th.dataset.k===sortK);
+    th.classList.toggle('asc', th.dataset.k===sortK && sortAsc);
+  });
+}
+document.querySelectorAll('#cmpTable th').forEach(th=>th.onclick=()=>{
+  const k=th.dataset.k; if(k===sortK) sortAsc=!sortAsc; else {sortK=k; sortAsc=false;} renderTable();
+});
+
+renderCmpBars(); renderTable();
+</script>
+</body>
+</html>
